@@ -2,20 +2,23 @@
 
 import sys
 
-from pip import main
-
 def error_exit(message):
     print(message, file=sys.stderr)
     sys.exit(1)
 
 class Board:
     def __init__(self, size=8):
+        if size % 2 != 0 or size < 4:
+            raise ValueError('Board size must be a even number larger than 2.')
         self.size = size
         self.state = [[0] * size]*size
         self.initial_placement()
 
     def inital_placement(self):
         # TODO: コマを初期配置する
+        # TODO: 引数にプレイヤーのインスタンスを入れる。
+        black_cells = [(self.size//2, self.size//2), (self.size//2 + 1, self.size//2+1)]
+        white_cells = [(self.size//2+1, self.size//2), (self.size//2, self.size//2+1)]
         pass
 
     def place(self, x, y, player):
@@ -26,9 +29,7 @@ class Board:
         self.state[y][x] = player
         self.update()
 
-    def update(self):
-        # オセロのルールにしたがって、コマをひっくり返す。
-        pass
+        # TODO: オセロのルールにしたがって、コマをひっくり返す。
 
     def show(self):
         print('+', end='')
@@ -40,7 +41,7 @@ class Board:
             for x in range(self.size):
                 if self.state[y][x] == '1':
                     print(f' ⚫ |', end='')
-                elif self.state[y][x] = '2':
+                elif self.state[y][x] == '2':
                     print(f' ⚪ |', end='')
                 else:
                     print(f'    |', end='')
@@ -48,6 +49,10 @@ class Board:
             for x in range(self.size):
                 print('----+', end='')
             print('')
+            fruits = ['apple', 'banana', 'cherry']
+            for x in fruits:
+              print(x)
+
 
 class Trainer():
     def __init__(self):
