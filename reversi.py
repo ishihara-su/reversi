@@ -2,9 +2,11 @@
 
 import sys
 
+
 def error_exit(message):
     print(message, file=sys.stderr)
     sys.exit(1)
+
 
 def another_player(player):
     if player == 1:
@@ -14,13 +16,36 @@ def another_player(player):
     else:
         raise ValueError('Undefined player id')
 
+
+class Player:
+    def __init__(self):
+        pass
+
+   def place(self, parameter_list):
+       """
+       docstring
+       """
+       pass
+
 class Board:
     def __init__(self, size=8):
         if size % 2 != 0 or size < 4:
             raise ValueError('Board size must be a even number larger than 2.')
         self.size = size
-        self.state = [[0] * size]*size
-        self.initial_placement()
+        self.state = [[0] * size] * size
+        self.points = [[-1] * size] * size
+
+    def clearAll(self):
+        for y in range(self.size):
+            for x in range(self.size):
+                self.state[y][x] = 0
+                self.points[y][x] = -1
+
+    def clearPoints(self):
+        for y in range(self.size):
+            for x in range(self.size):
+                self.points[y][x] = -1
+
 
     # NOTE そもそもこのクラスに設けるべきメソッドではないのではないか
     def inital_placement(self):
@@ -41,13 +66,14 @@ class Board:
     def turnover(self, x, y, player):
         pass
 
+    def check_gain(self, x, y, xd, yd, player):
+        pass
 
-    def check_gain(self, x, y, player):
+    def check_gain_naive(self, x, y, player):
         if x < 0 or self.size <= x or y < 0 or self.size <= y:
             raise ValueError('Invalid cell position')
         if self.state[y][x] != 0:
-            # ここの部分はエラーにしないで、単に0を返すだけでも良いかも知れない
-            raise RuntimeError('Placement on an occupied cell.')
+            return 0
         another = another_player(player)
         gain = 0
         if x > 1:
@@ -74,16 +100,30 @@ class Board:
                 c += 1
             if self.state[y + 1 + c][x] == player:
                 gain += c
-        # ななめ左下に進む
         if x < self.size - 1 and y > 1:
+            c = 0
+            while x + 1 + c >= 0 and y - 1 - c <= self.size - 1 and self.state[y-1-c][x+1+c] == another:
+                c += 1
+            if self.state[y+1+c][x-1-c] == player:
+                gain += c
+        if x < self.size - 1 and y < self.size - 1:
+            c = 0
+            while x + 1 + c <= self.size -1 and y + 1 + c <= self.size - 1 and self.state[y+1+c][x+1+c] == another:
+                c += 1
+            if self.state[y+1+c][x+1+c] == player:
+                gain += c
+        if x > 1 and y < self.size - 1:
             c = 0
             while x - 1 - c >= 0 and y + 1 + c <= self.size - 1 and self.state[y+1+c][x-1-c] == another:
                 c += 1
             if self.state[y+1+c][x-1-c] == player:
                 gain += c
-        # TODO ななめ右上
-        # TODO ななめ左上
-        # TODO ななめ右下
+        if x > 1 and y > 1:
+            c = 0
+            while x - 1 - c>= 0 and y - 1 - c>= 0 and self.state[y-1-c][x-1-c] == another:
+                c += 1
+            if self.staete[y-1-c][x-1-c] == player:
+                gain += c
         return gain
 
     def show(self):
