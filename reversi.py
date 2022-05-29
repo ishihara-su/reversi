@@ -1,8 +1,9 @@
 # reversi.py
 
+from enum import Enum, auto
+import random
 import sys
 
-from enum import Enum, auto
 
 INVALID = -1
 EMPTY = 0
@@ -40,7 +41,6 @@ class Board:
         self.scores = {BLACK: 2, WHITE: 2}
         self.initial_placement()
         self.turn = BLACK
-        self.show()
         self.clear_gains()
         self.eval_gain_all(self.turn)
         self.game_status = GameStatus.NORMAL
@@ -182,7 +182,7 @@ class Board:
             print('')
         print(
             f"Score: Black: {self.scores[BLACK]}, White: {self.scores[WHITE]}")
-        print(f"Turn: {'BLACK' if self.turn == BLACK else 'WHITE'}")
+        print(f"Turn: {'Black' if self.turn == BLACK else 'White'}")
 
 
 class Trainer():
@@ -199,6 +199,22 @@ class Agent:
 
     def place(board: Board) -> None:
         raise NotImplementedError('place() is not implemented.')
+
+
+class RandomAgent(Agent):
+    def place(self, board: Board) -> None:
+        if self.color != board.turn:
+            raise RuntimeError('Unmatched player color')
+        candidates = []
+        for y in range(board.size):
+            for x in range(board.size):
+                if board.gains[y][x] > 0:
+                    candidates.append((x, y))
+        if len(candidates) > 0:
+            x, y = random.choice(candidates)
+        else:
+            x, y = -1, -1
+        board.place(x, y, self.color)
 
 
 class HumanAgent(Agent):
@@ -260,5 +276,11 @@ def human_human_game(size: int = 8):
     run_game(HumanAgent(BLACK), HumanAgent(WHITE), size)
 
 
+def human_random_game(size: int = 8):
+    run_game(HumanAgent(BLACK), RandomAgent(WHITE), size)
+
+
 if __name__ == '__main__':
-    human_human_game(4)
+    # human_human_game(6)
+    # human_random_game(4)
+    run_game(RandomAgent(BLACK), RandomAgent(WHITE), 4, True)
