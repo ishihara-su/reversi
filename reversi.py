@@ -10,6 +10,10 @@ EMPTY = 0
 BLACK = 1
 WHITE = 2
 
+WIN = 1
+LOSE = -1
+DRAW = 0
+
 
 def error_exit(message):
     print(message, file=sys.stderr)
@@ -184,6 +188,16 @@ class Board:
             f"Score: Black: {self.scores[BLACK]}, White: {self.scores[WHITE]}")
         print(f"Turn: {'Black' if self.turn == BLACK else 'White'}")
 
+    def get_status(self):
+        code = (1 if self.turn == BLACK else 2, )
+        for y in range(self.size):
+            rowcode = 0
+            for x in range(self.size):
+                rowcode << 2
+                rowcode += self.states[y][x]
+            code = (*code, rowcode)
+        return code
+
 
 class Trainer():
     def __init__(self):
@@ -195,10 +209,48 @@ class Trainer():
 
 class Agent:
     def __init__(self, color: int) -> None:
+        self.reset(color)
+        self.n_games = 0
+        self.n_wins = 0
+        self.n_draw = 0
+
+    def reset(self, color: int):
         self.color = color
 
     def place(board: Board) -> None:
         raise NotImplementedError('place() is not implemented.')
+
+    def set_result(self, result: int) -> None:
+        self.n_games += 1
+        if result == WIN:
+            self.n_wins += 1
+        elif result == DRAW:
+            self.n_draw += 1
+
+
+class QLAgent(Agent):
+    def __init__(self, color: int) -> None:
+        super.__init__(color)
+        self._qtable = dict()
+
+    def reset(self, color: int):
+        super.reset(color)
+        self.state_history = []
+
+    def place(self, board: Board) -> None:
+        x, y = self.find_best(board)
+        board.place(x, y, self.color)
+
+    def find_best(self, board):
+        # TODO: find the best hand
+        pass
+
+    def qv(self, state, action):
+        self._qtable[state][action]
+
+    def set_result(self, result: int) -> None:
+        super().set_result(result)
+        # TODO: update Qtable
 
 
 class RandomAgent(Agent):
@@ -265,10 +317,16 @@ def run_game(agent_black: Agent, agent_white: Agent,
             break
     board.show()
     if board.scores[BLACK] == board.scores[WHITE]:
+        agent_black.set_result(DRAW)
+        agent_white.set_result(DRAW)
         print('Draw.')
     elif board.scores[BLACK] > board.scores[WHITE]:
+        agent_black.set_result(WIN)
+        agent_white.set_result(LOSE)
         print('Black won.')
     else:
+        agent_black.set_result(LOSE)
+        agent_white.set_result(WIN)
         print('Whte won')
 
 
