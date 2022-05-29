@@ -2,148 +2,188 @@
 
 import sys
 
+from enum import Enum, auto
+
+INVALID = -1
+EMPTY = 0
+BLACK = 1
+WHITE = 2
+
 
 def error_exit(message):
     print(message, file=sys.stderr)
     sys.exit(1)
 
 
-def another_player(player):
-    if player == 1:
-        return 0
-    elif player == 2:
-        return 1
+def another_color(color: int):
+    if color == BLACK:
+        return WHITE
+    elif color == WHITE:
+        return BLACK
     else:
-        raise ValueError('Undefined player id')
+        raise ValueError('Undefined player color')
 
 
-class Player:
-    def __init__(self):
-        pass
+class GameStatus(Enum):
+    NORMAL = auto()
+    PASSED = auto()
+    END = auto()
 
-   def place(self, parameter_list):
-       """
-       docstring
-       """
-       pass
 
 class Board:
     def __init__(self, size=8):
         if size % 2 != 0 or size < 4:
             raise ValueError('Board size must be a even number larger than 2.')
         self.size = size
-        self.state = [[0] * size] * size
-        self.points = [[-1] * size] * size
+        self.states = [[0 for x in range(size)] for y in range(size)]
+        self.gains = [[0 for x in range(size)] for y in range(size)]
+        self.scores = {BLACK: 2, WHITE: 2}
+        self.initial_placement()
+        self.turn = BLACK
+        self.show()
+        self.clear_gains()
+        self.eval_gain_all(self.turn)
+        self.game_status = GameStatus.NORMAL
 
-    def clearAll(self):
+    def change_turn(self):
+        self.turn = another_color(self.turn)
+        self.clear_gains()
+        self.eval_gain_all(self.turn)
+
+    def clear_all(self):
         for y in range(self.size):
             for x in range(self.size):
-                self.state[y][x] = 0
-                self.points[y][x] = -1
+                self.states[y][x] = 0
+                self.gains[y][x] = 0
 
-    def clearPoints(self):
+    def clear_gains(self):
         for y in range(self.size):
             for x in range(self.size):
-                self.points[y][x] = -1
+                self.gains[y][x] = 0
 
+    def initial_placement(self):
+        for x, y, color in [(self.size//2, self.size//2-1, BLACK),
+                            (self.size//2-1, self.size//2, BLACK),
+                            (self.size//2-1, self.size//2-1, WHITE),
+                            (self.size//2, self.size//2, WHITE)]:
+            self.states[y][x] = color
 
-    # NOTE そもそもこのクラスに設けるべきメソッドではないのではないか
-    def inital_placement(self):
-        # TODO: コマを初期配置する
-        # TODO: 引数にプレイヤーのインスタンスを入れる。
-        black_cells = [(self.size//2, self.size//2), (self.size//2 + 1, self.size//2+1)]
-        white_cells = [(self.size//2+1, self.size//2), (self.size//2, self.size//2+1)]
-        pass
-
-    def place(self, x, y, player):
-        if player < 1 or 2 < player:
+    def place(self, x: int, y: int, color: int) -> None:
+        if color < 1 or 2 < color:
             raise ValueError('Undefined player number')
-       # 置けるかどうか確認
-        self.state[y][x] = player
-        self.update()
+        if x < 0 or y < 0:
+            if self.game_status == GameStatus.PASSED:
+                self.game_status = GameStatus.END
+                return
+            elif self.game_status == GameStatus.NORMAL:
+                self.game_status = GameStatus.PASSED
+                return
+            else:
+                raise RuntimeError('Game is running after it ended.')
+        gain = self.gains[y][x]
+        if gain <= 0 and self.game_status == GameStatus.NORMAL:
+            raise RuntimeError('Placed on an invalid square.')
+        self.states[y][x] = color
+        self.turn_over(x, y, color)
+        self.add_score(gain, color)
+        if sum(self.scores.values()) == self.size * self.size:
+            self.game_status = GameStatus.END
+        else:
+            self.game_status = GameStatus.NORMAL
 
-    # TODO: オセロのルールにしたがって、コマをひっくり返す。
-    def turnover(self, x, y, player):
-        pass
+    def add_score(self, gain, color):
+        self.scores[color] += gain + 1
+        self.scores[another_color(color)] -= gain
 
-    def check_gain(self, x, y, xd, yd, player):
-        pass
+    def eval_gain_all(self, color: int) -> bool:
+        sum_gain = 0
+        for y in range(self.size):
+            for x in range(self.size):
+                g = self.eval_gain(x, y, color)
+                sum_gain += g
+                self.gains[y][x] = g
+        if sum_gain == 0:
+            return False
+        return True
 
-    def check_gain_naive(self, x, y, player):
-        if x < 0 or self.size <= x or y < 0 or self.size <= y:
-            raise ValueError('Invalid cell position')
-        if self.state[y][x] != 0:
+    def state(self, x, y):
+        if 0 <= x <= self.size - 1 and 0 <= y <= self.size - 1:
+            return self.states[y][x]
+        else:
+            return INVALID
+
+    def _turn_over_line(self, x: int, y: int, color: int,
+                        xd: int, yd: int) -> None:
+        if xd < -1 or xd > 1 or yd < -1 or 1 < yd:
+            raise ValueError('xd, yd must be -1, 0, or 1.')
+        c = 0
+        another = another_color(color)
+        while self.state(x + (c + 1) * xd, y + (c + 1) * yd) == another:
+            c += 1
+        if self.state(x + (c + 1) * xd, y + (c + 1) * yd) != color or c <= 0:
+            return
+        c = 0
+        while self.state(x + (c + 1) * xd, y + (c + 1) * yd) == another:
+            self.states[y + (c + 1) * yd][x + (c+1) * xd] = color
+            c += 1
+
+    def turn_over(self, x, y, color) -> int:
+        for xd in [-1, 0, 1]:
+            for yd in [-1, 0, 1]:
+                if xd == 0 and yd == 0:
+                    continue
+                self._turn_over_line(x, y, color, xd, yd)
+
+    def _eval_gain_line(self, x: int, y: int, color: int,
+                        xd: int, yd: int) -> int:
+        if xd < -1 or xd > 1 or yd < -1 or 1 < yd:
+            raise ValueError('xd, yd must be -1, 0, or 1.')
+        c = 0
+        another = another_color(color)
+        while self.state(x + (c + 1) * xd, y + (c + 1) * yd) == another:
+            c += 1
+        if self.state(x + (c + 1) * xd, y + (c + 1) * yd) != color or c <= 0:
             return 0
-        another = another_player(player)
+        return c
+
+    def eval_gain(self, x, y, color) -> int:
+        if self.states[y][x] != 0:
+            return 0
         gain = 0
-        if x > 1:
-            c = 0
-            while x - 1 - c >= 0 and self.state[y][x - 1 - c] == another:
-                c += 1
-            if self.state[y][x - 1 - c] == player:
-                gain += c
-        if x < self.size - 1:
-            c = 0
-            while x + 1 + c <= self.size - 1 and self.state[y][x + 1 + c] == another:
-                c += 1
-            if self.state[y][x + 1 + c] == player:
-                gain += c
-        if y > 1:
-            c = 0
-            while y - 1 - c >= 0 and self.state[y - 1 - c][x] == another:
-                c += 1
-            if self.state[y - 1 - c][x] == player:
-                gain += c
-        if y < self.size - 1:
-            c = 0
-            while y + 1 + c <= self.size - 1 and self.state[y + 1 + c][x] == another:
-                c += 1
-            if self.state[y + 1 + c][x] == player:
-                gain += c
-        if x < self.size - 1 and y > 1:
-            c = 0
-            while x + 1 + c >= 0 and y - 1 - c <= self.size - 1 and self.state[y-1-c][x+1+c] == another:
-                c += 1
-            if self.state[y+1+c][x-1-c] == player:
-                gain += c
-        if x < self.size - 1 and y < self.size - 1:
-            c = 0
-            while x + 1 + c <= self.size -1 and y + 1 + c <= self.size - 1 and self.state[y+1+c][x+1+c] == another:
-                c += 1
-            if self.state[y+1+c][x+1+c] == player:
-                gain += c
-        if x > 1 and y < self.size - 1:
-            c = 0
-            while x - 1 - c >= 0 and y + 1 + c <= self.size - 1 and self.state[y+1+c][x-1-c] == another:
-                c += 1
-            if self.state[y+1+c][x-1-c] == player:
-                gain += c
-        if x > 1 and y > 1:
-            c = 0
-            while x - 1 - c>= 0 and y - 1 - c>= 0 and self.state[y-1-c][x-1-c] == another:
-                c += 1
-            if self.staete[y-1-c][x-1-c] == player:
-                gain += c
+        for xd in [-1, 0, 1]:
+            for yd in [-1, 0, 1]:
+                if xd == 0 and yd == 0:
+                    continue
+                gain += self._eval_gain_line(x, y, color, xd, yd)
         return gain
 
-    def show(self):
+    def show(self, show_guide: bool = False):
         print('+', end='')
         for x in range(self.size):
             print('----+', end='')
         print('')
+        c_code = ord('a')
         for y in range(self.size):
             print('|', end='')
             for x in range(self.size):
-                if self.state[y][x] == '1':
-                    print(f' ⚫ |', end='')
-                elif self.state[y][x] == '2':
-                    print(f' ⚪ |', end='')
+                if self.states[y][x] == BLACK:
+                    print(' ⚫ |', end='')
+                elif self.states[y][x] == WHITE:
+                    print(' ⚪ |', end='')
+                elif show_guide and self.gains[y][x] > 0:
+                    print(f'  {chr(c_code)} |', end='')
+                    c_code += 1
                 else:
-                    print(f'    |', end='')
+                    print('    |', end='')
+            print()
             print('+', end='')
             for x in range(self.size):
                 print('----+', end='')
             print('')
+        print(
+            f"Score: Black: {self.scores[BLACK]}, White: {self.scores[WHITE]}")
+        print(f"Turn: {'BLACK' if self.turn == BLACK else 'WHITE'}")
+
 
 class Trainer():
     def __init__(self):
@@ -152,9 +192,73 @@ class Trainer():
     def run(self):
         pass
 
-def main():
-    t = Trainer()
-    t.run()
+
+class Agent:
+    def __init__(self, color: int) -> None:
+        self.color = color
+
+    def place(board: Board) -> None:
+        raise NotImplementedError('place() is not implemented.')
+
+
+class HumanAgent(Agent):
+    def place(self, board: Board) -> None:
+        if self.color != board.turn:
+            raise RuntimeError('Unmatched player color')
+        candidates = dict()
+        c_code = ord('a')
+        for y in range(board.size):
+            for x in range(board.size):
+                if board.gains[y][x] > 0:
+                    candidates[chr(c_code)] = (x, y)
+                    c_code += 1
+        board.show(show_guide=True)
+        while True:
+            c = input('> ')
+            if c == 'q':
+                print('Bye')
+                sys.exit(0)
+            if c == 'p':
+                if len(candidates) > 0:
+                    print('You cannot pass now.')
+                    continue
+                x, y = -1, -1
+                break
+            try:
+                x, y = candidates[c]
+                break
+            except KeyError:
+                print('Undefined key.')
+                continue
+        board.place(x, y, self.color)
+
+
+def run_game(agent_black: Agent, agent_white: Agent,
+             size: int = 8, view: bool = False):
+    board = Board(size)
+    agents = [agent_black, agent_white]
+    count = 0
+    while True:
+        if view:
+            board.show()
+        a = agents[count % 2]
+        a.place(board)
+        board.change_turn()
+        count += 1
+        if board.game_status == GameStatus.END:
+            break
+    board.show()
+    if board.scores[BLACK] == board.scores[WHITE]:
+        print('Draw.')
+    elif board.scores[BLACK] > board.scores[WHITE]:
+        print('Black won.')
+    else:
+        print('Whte won')
+
+
+def human_human_game(size: int = 8):
+    run_game(HumanAgent(BLACK), HumanAgent(WHITE), size)
+
 
 if __name__ == '__main__':
-    main()
+    human_human_game(4)
