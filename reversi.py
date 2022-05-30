@@ -1,6 +1,7 @@
 # reversi.py
 
 from enum import Enum, auto
+import math
 import random
 import sys
 
@@ -171,9 +172,9 @@ class Board:
             print('|', end='')
             for x in range(self.size):
                 if self.states[y][x] == BLACK:
-                    print(' ⚫ |', end='')
+                    print(' ●  |', end='')
                 elif self.states[y][x] == WHITE:
-                    print(' ⚪ |', end='')
+                    print(' ○  |', end='')
                 elif show_guide and self.gains[y][x] > 0:
                     print(f'  {chr(c_code)} |', end='')
                     c_code += 1
@@ -188,12 +189,12 @@ class Board:
             f"Score: Black: {self.scores[BLACK]}, White: {self.scores[WHITE]}")
         print(f"Turn: {'Black' if self.turn == BLACK else 'White'}")
 
-    def get_status(self):
+    def get_code(self):
         code = (1 if self.turn == BLACK else 2, )
         for y in range(self.size):
             rowcode = 0
             for x in range(self.size):
-                rowcode << 2
+                rowcode <<= 2
                 rowcode += self.states[y][x]
             code = (*code, rowcode)
         return code
@@ -208,13 +209,13 @@ class Trainer():
 
 
 class Agent:
-    def __init__(self, color: int) -> None:
+    def __init__(self, color: int = BLACK) -> None:
         self.reset(color)
         self.n_games = 0
         self.n_wins = 0
         self.n_draw = 0
 
-    def reset(self, color: int):
+    def reset(self, color: int, learning: bool = True):
         self.color = color
 
     def place(board: Board) -> None:
@@ -229,28 +230,88 @@ class Agent:
 
 
 class QLAgent(Agent):
-    def __init__(self, color: int) -> None:
-        super.__init__(color)
+    def __init__(self, color: int = BLACK,
+                 learning_rate: float = 0.3,
+                 discount_ratio: float = 0.7) -> None:
+        super().__init__(color)
+        self.learning_rate = learning_rate
+        self.discount_ratio = discount_ratio
         self._qtable = dict()
+        self.initial_q = 0.1
 
-    def reset(self, color: int):
-        super.reset(color)
+    def reset(self, color: int, learning: bool = True):
+        super().reset(color)
         self.state_history = []
+        self.learning = learning
 
     def place(self, board: Board) -> None:
-        x, y = self.find_best(board)
+        code = board.get_code()
+        if code not in self._qtable:
+            self.setup_qtable(board, code)
+        if self.learning:
+            x, y = self.select_softmax(board)
+            self.state_history.append((board.get_code(), (x, y)))
+        else:
+            x, y = self.select_best(board)
         board.place(x, y, self.color)
 
-    def find_best(self, board):
-        # TODO: find the best hand
-        pass
+    def setup_qtable(self, board: Board, code: tuple[int, ...]):
+        self._qtable[code] = dict()
+        for y in range(board.size):
+            for x in range(board.size):
+                if board.states[y][x] != EMPTY:
+                    self._qtable[code][(x, y)] = self.initial_q
 
-    def qv(self, state, action):
-        self._qtable[state][action]
+    def select_softmax(self, board: Board) -> tuple[int, int]:
+        temperature = 0.5
+        code = board.get_code()
+        xmax = max([q/temperature for q in self._qtable[code].values()])
+        weights = dict()
+        for pos in self._qtable[code].keys():
+            weights[pos] = math.exp(self._qtable[code][pos]/temperature - xmax)
+        sum_weight = sum(weights.values())
+        r = random.random() * sum_weight
+        for pos in self._qtable[code].keys():
+            if r < weights[pos]:
+                return pos
+            r -= weights[pos]
+        assert False
+
+    def select_best(self, board: Board) -> tuple[int, int]:
+        candidates = self.get_candidates(board)
+        maxq = -float('inf')
+        best_pos = (-1, -1)
+        code = board.get_code()
+        for pos in candidates:
+            try:
+                q = self._qtable[code][pos]
+            except KeyError:
+                continue
+            if q > maxq:
+                maxq = q
+                best_pos = pos
+        if best_pos != (-1, -1):
+            return best_pos
+        return random.choice(candidates)
 
     def set_result(self, result: int) -> None:
         super().set_result(result)
-        # TODO: update Qtable
+        if not self.learning:
+            return
+        s = 0.0
+        maxq = 0.0
+        if result == WIN:
+            s = 1.0
+        elif result == DRAW:
+            s = 0.0
+        else:
+            s = -1.0
+        for (code, pos) in reversed(self.history):
+            oldq = self._qtable[code][pos]
+            newq = oldq + self.learning_rate * \
+                (s + self.discount_ratio * maxq - oldq)
+            maxq = max(newq, maxq)
+            self._qtable[code][pos] = newq
 
 
 class RandomAgent(Agent):
@@ -302,8 +363,9 @@ class HumanAgent(Agent):
 
 
 def run_game(agent_black: Agent, agent_white: Agent,
-             size: int = 8, view: bool = False):
-    board = Board(size)
+             board: Board, view: bool = False, learning: bool = True) -> None:
+    agent_black.reset(BLACK, learning)
+    agent_white.reset(WHITE, learning)
     agents = [agent_black, agent_white]
     count = 0
     while True:
@@ -315,30 +377,51 @@ def run_game(agent_black: Agent, agent_white: Agent,
         count += 1
         if board.game_status == GameStatus.END:
             break
-    board.show()
+    result_str = ''
     if board.scores[BLACK] == board.scores[WHITE]:
         agent_black.set_result(DRAW)
         agent_white.set_result(DRAW)
-        print('Draw.')
+        result_str = 'Draw.'
     elif board.scores[BLACK] > board.scores[WHITE]:
         agent_black.set_result(WIN)
         agent_white.set_result(LOSE)
-        print('Black won.')
+        result_str = 'Black won.'
     else:
         agent_black.set_result(LOSE)
         agent_white.set_result(WIN)
-        print('Whte won')
+        result_str = 'White won.'
+    if view:
+        board.show()
+        print(result_str)
 
 
 def human_human_game(size: int = 8):
-    run_game(HumanAgent(BLACK), HumanAgent(WHITE), size)
+    board = Board(size)
+    run_game(HumanAgent(), HumanAgent(), board)
 
 
 def human_random_game(size: int = 8):
-    run_game(HumanAgent(BLACK), RandomAgent(WHITE), size)
+    board = Board(size)
+    run_game(HumanAgent(), RandomAgent(), board, True)
+
+
+def train(a1: Agent, a2: Agent, board: Board, max_epoch: int = 10000) -> None:
+    for i in range(max_epoch):
+        run_game(a1, a2, board, learning = True)
+        run_game(a2, a1, board, learning = True)
+
+
+def human_qa_game(size: int = 8):
+    board = Board(size)
+    q1 = QLAgent()
+    q2 = QLAgent()
+    train(q1, q2, board, 10000)
+    ha = HumanAgent()
+    run_game(ha, q1, board, learning = False)
 
 
 if __name__ == '__main__':
     # human_human_game(6)
     # human_random_game(4)
-    run_game(RandomAgent(BLACK), RandomAgent(WHITE), 4, True)
+    # run_game(RandomAgent(), RandomAgent(), Board(4), True)
+    human_qa_game(4)
