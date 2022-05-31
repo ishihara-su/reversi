@@ -43,12 +43,7 @@ class Board:
         self.size = size
         self.states = [[0 for x in range(size)] for y in range(size)]
         self.gains = [[0 for x in range(size)] for y in range(size)]
-        self.scores = {BLACK: 2, WHITE: 2}
-        self.initial_placement()
-        self.turn = BLACK
-        self.clear_gains()
-        self.eval_gain_all(self.turn)
-        self.game_status = GameStatus.NORMAL
+        self.clear_all()
 
     def change_turn(self):
         self.turn = another_color(self.turn)
@@ -60,6 +55,11 @@ class Board:
             for x in range(self.size):
                 self.states[y][x] = 0
                 self.gains[y][x] = 0
+        self.game_status = GameStatus.NORMAL
+        self.turn = BLACK
+        self.scores = {BLACK: 2, WHITE: 2}
+        self.initial_placement()
+        self.eval_gain_all(self.turn)
 
     def clear_gains(self):
         for y in range(self.size):
@@ -241,7 +241,7 @@ class QLAgent(Agent):
 
     def reset(self, color: int, learning: bool = True):
         super().reset(color)
-        self.state_history = []
+        self.history = []
         self.learning = learning
 
     def place(self, board: Board) -> None:
@@ -250,7 +250,7 @@ class QLAgent(Agent):
             self.setup_qtable(board, code)
         if self.learning:
             x, y = self.select_softmax(board)
-            self.state_history.append((board.get_code(), (x, y)))
+            self.history.append((board.get_code(), (x, y)))
         else:
             x, y = self.select_best(board)
         board.place(x, y, self.color)
@@ -259,12 +259,14 @@ class QLAgent(Agent):
         self._qtable[code] = dict()
         for y in range(board.size):
             for x in range(board.size):
-                if board.states[y][x] != EMPTY:
+                if board.gains[y][x] > 0:
                     self._qtable[code][(x, y)] = self.initial_q
 
     def select_softmax(self, board: Board) -> tuple[int, int]:
-        temperature = 0.5
         code = board.get_code()
+        if len(self._qtable[code]) < 1:
+            return (-1, -1)
+        temperature = 0.5
         xmax = max([q/temperature for q in self._qtable[code].values()])
         weights = dict()
         for pos in self._qtable[code].keys():
@@ -278,7 +280,11 @@ class QLAgent(Agent):
         assert False
 
     def select_best(self, board: Board) -> tuple[int, int]:
-        candidates = self.get_candidates(board)
+        candidates = []
+        for y in range(board.size):
+            for x in range(board.size):
+                if board.gains[y][x] > 0:
+                    candidates.append((x, y))
         maxq = -float('inf')
         best_pos = (-1, -1)
         code = board.get_code()
@@ -307,6 +313,8 @@ class QLAgent(Agent):
         else:
             s = -1.0
         for (code, pos) in reversed(self.history):
+            if pos == (-1, -1):
+                continue
             oldq = self._qtable[code][pos]
             newq = oldq + self.learning_rate * \
                 (s + self.discount_ratio * maxq - oldq)
@@ -368,6 +376,7 @@ def run_game(agent_black: Agent, agent_white: Agent,
     agent_white.reset(WHITE, learning)
     agents = [agent_black, agent_white]
     count = 0
+    board.clear_all()
     while True:
         if view:
             board.show()
@@ -405,23 +414,23 @@ def human_random_game(size: int = 8):
     run_game(HumanAgent(), RandomAgent(), board, True)
 
 
-def train(a1: Agent, a2: Agent, board: Board, max_epoch: int = 10000) -> None:
+def train(a1: Agent, a2: Agent, board: Board,
+          max_epoch: int = 10000, view: bool = False) -> None:
     for i in range(max_epoch):
-        run_game(a1, a2, board, learning = True)
-        run_game(a2, a1, board, learning = True)
+        run_game(a1, a2, board, view, learning=True)
+        run_game(a2, a1, board, view, learning=True)
 
 
-def human_qa_game(size: int = 8):
+def human_qa_game(size: int = 8, num_epoch: int = 10000):
     board = Board(size)
     q1 = QLAgent()
     q2 = QLAgent()
-    train(q1, q2, board, 10000)
+    train(q1, q2, board, num_epoch, view=True)
     ha = HumanAgent()
-    run_game(ha, q1, board, learning = False)
-
+    run_game(ha, q1, board, view=True, learning=False)
 
 if __name__ == '__main__':
     # human_human_game(6)
     # human_random_game(4)
     # run_game(RandomAgent(), RandomAgent(), Board(4), True)
-    human_qa_game(4)
+    human_qa_game(4, 40)
