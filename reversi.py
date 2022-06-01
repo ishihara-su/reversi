@@ -1,7 +1,10 @@
 # reversi.py
 
+# TODO: 学習経過の表示
+
 from enum import Enum, auto
 import math
+import pickle
 import random
 import sys
 
@@ -192,20 +195,12 @@ class Board:
     def get_code(self):
         code = (1 if self.turn == BLACK else 2, )
         for y in range(self.size):
-            rowcode = 0
+            row_code = 0
             for x in range(self.size):
-                rowcode <<= 2
-                rowcode += self.states[y][x]
-            code = (*code, rowcode)
+                row_code <<= 2
+                row_code += self.states[y][x]
+            code = (*code, row_code)
         return code
-
-
-class Trainer():
-    def __init__(self):
-        pass
-
-    def run(self):
-        pass
 
 
 class Agent:
@@ -238,6 +233,14 @@ class QLAgent(Agent):
         self.discount_ratio = discount_ratio
         self._qtable = dict()
         self.initial_q = 0.1
+
+    def save(self, filename='reversi_qtable.pickle'):
+        with open(filename, 'wb') as f:
+            pickle.dump(self._qtable, f)
+
+    def load(self, filename='reversi_qtable.pickle'):
+        with open(filename, 'rb') as f:
+            self._qtable = pickle.load(f)
 
     def reset(self, color: int, learning: bool = True):
         super().reset(color)
@@ -287,6 +290,8 @@ class QLAgent(Agent):
                     candidates.append((x, y))
         maxq = -float('inf')
         best_pos = (-1, -1)
+        if len(candidates) == 0:
+            return best_pos
         code = board.get_code()
         for pos in candidates:
             try:
@@ -428,6 +433,7 @@ def human_qa_game(size: int = 8, num_epoch: int = 10000):
     train(q1, q2, board, num_epoch, view=True)
     ha = HumanAgent()
     run_game(ha, q1, board, view=True, learning=False)
+
 
 if __name__ == '__main__':
     # human_human_game(6)
