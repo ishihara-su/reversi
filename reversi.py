@@ -376,7 +376,20 @@ class HumanAgent(Agent):
 
 
 def run_game(agent_black: Agent, agent_white: Agent,
-             board: Board, view: bool = False, learning: bool = True) -> None:
+             board: Board, view: bool = False, learning: bool = True) -> int:
+    """Run a game
+
+    Args:
+        agent_black (Agent): [Black Agent]
+        agent_white (Agent): [White Agent]
+        board (Board): [Board]
+        view (bool, optional): [Show result]. Defaults to False.
+        learning (bool, optional): [Toggle the agents to learn or not].
+                                   Defaults to True.
+
+    Returns:
+        int: [Result code - Black's win = 1, Draw = 0, Lose = -1]
+    """
     agent_black.reset(BLACK, learning)
     agent_white.reset(WHITE, learning)
     agents = [agent_black, agent_white]
@@ -392,14 +405,17 @@ def run_game(agent_black: Agent, agent_white: Agent,
         if board.game_status == GameStatus.END:
             break
     result_str = ''
+    result_code = LOSE
     if board.scores[BLACK] == board.scores[WHITE]:
         agent_black.set_result(DRAW)
         agent_white.set_result(DRAW)
         result_str = 'Draw.'
+        result_code = DRAW
     elif board.scores[BLACK] > board.scores[WHITE]:
         agent_black.set_result(WIN)
         agent_white.set_result(LOSE)
         result_str = 'Black won.'
+        result_code = WIN
     else:
         agent_black.set_result(LOSE)
         agent_white.set_result(WIN)
@@ -407,6 +423,7 @@ def run_game(agent_black: Agent, agent_white: Agent,
     if view:
         board.show()
         print(result_str)
+    return result_code
 
 
 def human_human_game(size: int = 8):
