@@ -452,8 +452,31 @@ def human_qa_game(size: int = 8, num_epoch: int = 10000):
     run_game(ha, q1, board, view=True, learning=False)
 
 
+def train_and_test(size: int = 8, num_repeat: int = 100000):
+    num_leaning_epochs = 500
+    num_test_games = 10
+    board = Board(size)
+    q1 = QLAgent()
+    q2 = QLAgent()
+    ra = RandomAgent()
+    for i in range(num_repeat):
+        train(q1, q2, board, num_leaning_epochs)
+        n_wins = 0
+        n_draws = 0
+        for j in range(num_test_games):
+            if run_game(q1, ra, board, learning=False) == WIN:
+                n_wins += 1
+            if run_game(ra, q1, board, learning=False) == LOSE:
+                n_wins += 1
+        print(f'{i:7d} Wins: {n_wins:2d} Draws: {n_draws:2d} '
+              f'Loses: {2 * num_test_games - n_wins - n_draws:2d} '
+              f'WP: {n_wins/(2 * num_test_games):.3f}', flush=True)
+        q1.save()
+
+
 if __name__ == '__main__':
     # human_human_game(6)
     # human_random_game(4)
     # run_game(RandomAgent(), RandomAgent(), Board(4), True)
-    human_qa_game(4, 40)
+    # human_qa_game(4, 40)
+    train_and_test(6)
