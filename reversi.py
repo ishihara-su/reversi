@@ -451,6 +451,7 @@ def train_and_test(size: int = 8, num_repeat: int = 100000):
     ra = RandomAgent()
     for i in range(num_repeat):
         train(q1, q2, board, num_leaning_epochs)
+        train(q1, ra, board, num_leaning_epochs)
         n_wins = 0
         n_draws = 0
         for j in range(num_test_games):
@@ -461,7 +462,7 @@ def train_and_test(size: int = 8, num_repeat: int = 100000):
         print(f'{i:7d} Wins: {n_wins:2d} Draws: {n_draws:2d} '
               f'Loses: {2 * num_test_games - n_wins - n_draws:2d} '
               f'WP: {n_wins/(2 * num_test_games):.3f}', flush=True)
-        q1.save()
+        # q1.save()
 
 
 if __name__ == '__main__':
