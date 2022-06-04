@@ -218,9 +218,9 @@ class Agent:
 
     def set_result(self, result: int) -> None:
         self.n_games += 1
-        if result == WIN:
+        if result > 0:
             self.n_wins += 1
-        elif result == DRAW:
+        elif result == 0:
             self.n_draw += 1
 
 
@@ -309,20 +309,13 @@ class QLAgent(Agent):
         super().set_result(result)
         if not self.learning:
             return
-        s = 0.0
         maxq = 0.0
-        if result == WIN:
-            s = 1.0
-        elif result == DRAW:
-            s = 0.0
-        else:
-            s = -1.0
         for (code, pos) in reversed(self.history):
             if pos == (-1, -1):
                 continue
             oldq = self._qtable[code][pos]
             newq = oldq + self.learning_rate * \
-                (s + self.discount_ratio * maxq - oldq)
+                (result + self.discount_ratio * maxq - oldq)
             maxq = max(newq, maxq)
             self._qtable[code][pos] = newq
 
@@ -405,21 +398,18 @@ def run_game(agent_black: Agent, agent_white: Agent,
         if board.game_status == GameStatus.END:
             break
     result_str = ''
-    result_code = LOSE
-    if board.scores[BLACK] == board.scores[WHITE]:
-        agent_black.set_result(DRAW)
-        agent_white.set_result(DRAW)
-        result_str = 'Draw.'
-        result_code = DRAW
-    elif board.scores[BLACK] > board.scores[WHITE]:
-        agent_black.set_result(WIN)
-        agent_white.set_result(LOSE)
+    black_surplus = board.scores[BLACK] - board.scores[WHITE]
+    agent_black.set_result(black_surplus)
+    agent_white.set_result(-black_surplus)
+    if black_surplus > 0:
         result_str = 'Black won.'
         result_code = WIN
+    elif black_surplus == 0:
+        result_str = 'Draw.'
+        result_code = DRAW
     else:
-        agent_black.set_result(LOSE)
-        agent_white.set_result(WIN)
         result_str = 'White won.'
+        result_code = LOSE
     if view:
         board.show()
         print(result_str)
@@ -454,7 +444,7 @@ def human_qa_game(size: int = 8, num_epoch: int = 10000):
 
 def train_and_test(size: int = 8, num_repeat: int = 100000):
     num_leaning_epochs = 500
-    num_test_games = 10
+    num_test_games = 50
     board = Board(size)
     q1 = QLAgent()
     q2 = QLAgent()
