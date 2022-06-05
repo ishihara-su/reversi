@@ -6,6 +6,7 @@ from enum import Enum, auto
 import math
 import pickle
 import random
+import signal
 import sys
 
 
@@ -17,6 +18,13 @@ WHITE = 2
 WIN = 1
 LOSE = -1
 DRAW = 0
+
+record_status = False
+
+
+def hup_handler(signum, frame):
+    global record_status
+    record_status = True
 
 
 def error_exit(message):
@@ -227,12 +235,17 @@ class Agent:
 class QLAgent(Agent):
     def __init__(self, color: int = BLACK,
                  learning_rate: float = 0.3,
-                 discount_ratio: float = 0.7) -> None:
+                 discount_ratio: float = 0.7,
+                 hup_record: bool = False) -> None:
         super().__init__(color)
         self.learning_rate = learning_rate
         self.discount_ratio = discount_ratio
         self._qtable = dict()
         self.initial_q = 0.1
+        self.record_data = False
+        if hup_record:
+            print('hup_record: on')
+            signal.signal(signal.Signals.SIGUSR1, hup_handler)
 
     def save(self, filename='reversi_qtable.pickle'):
         with open(filename, 'wb') as f:
@@ -318,6 +331,10 @@ class QLAgent(Agent):
                 (result + self.discount_ratio * maxq - oldq)
             maxq = max(newq, maxq)
             self._qtable[code][pos] = newq
+        global record_status
+        if record_status:
+            self.save()
+            record_status = False
 
 
 class RandomAgent(Agent):
@@ -446,7 +463,7 @@ def train_and_test(size: int = 8, num_repeat: int = 100000):
     num_leaning_epochs = 500
     num_test_games = 50
     board = Board(size)
-    q1 = QLAgent()
+    q1 = QLAgent(hup_record=True)
     q2 = QLAgent()
     ra = RandomAgent()
     for i in range(num_repeat):
@@ -470,4 +487,4 @@ if __name__ == '__main__':
     # human_random_game(4)
     # run_game(RandomAgent(), RandomAgent(), Board(4), True)
     # human_qa_game(4, 40)
-    train_and_test(6)
+    train_and_test(4)
