@@ -201,14 +201,17 @@ class Board:
         print(f"Turn: {'Black' if self.turn == BLACK else 'White'}")
 
     def get_code(self):
-        code = (1 if self.turn == BLACK else 2, )
+        black_code = 0
+        white_code = 0
         for y in range(self.size):
-            row_code = 0
             for x in range(self.size):
-                row_code <<= 2
-                row_code += self.states[y][x]
-            code = (*code, row_code)
-        return code
+                black_code <<= 1
+                white_code <<= 1
+                if self.states[y][x] == BLACK:
+                    black_code += 1
+                elif self.states[y][x] == WHITE:
+                    white_code += 1
+        return (1 if self.turn == BLACK else 2, black_code, white_code)
 
 
 class Agent:
