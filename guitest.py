@@ -9,7 +9,7 @@ BOARD_SIZE = 8
 layout = [
     [sg.Text('Reversi')],
     [sg.Graph((800, 800), (0, 450), (450, 0), key='-BOARD-',
-        change_submits=True, drag_submits=False)],
+              change_submits=True, drag_submits=False)],
     [sg.Button('Next'), sg.Button('Exit')]
 ]
 
